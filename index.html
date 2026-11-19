@@ -115,7 +115,7 @@
   </div>
 
   <script>
-    const API_KEY = "AQ.Ab8RN6K7Le4q-Jzg29xHM36yvYB_d_rhX4XqoDt8cuGKvuoLjA";
+    const API_KEY = "AQ.Ab8RN6I4-AdgIEGvkQofW9Ujk6JRLjHcH_WYUlvhwffVqO_gbQ";
     const MODEL = "gemini-2.5-flash";
 
     const video = document.getElementById("video");
@@ -215,8 +215,8 @@
         if (frontDataUrl) parts.push(dataUrlToPart(frontDataUrl));
         if (backDataUrl) parts.push(dataUrlToPart(backDataUrl));
 
-       const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`;
-
+       const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${encodeURIComponent(API_KEY)}`;
+        
         const res = await fetch(url, {
           method: "POST",
           headers: {
