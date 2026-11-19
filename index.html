@@ -115,7 +115,7 @@
   </div>
 
   <script>
-    const API_KEY = "AQ.Ab8RN6I4-AdgIEGvkQofW9Ujk6JRLjHcH_WYUlvhwffVqO_gbQ";
+    const WORKER_URL = "https://young-dew-1099.eredeuspro.workers.dev";
     const MODEL = "gemini-2.5-flash";
 
     const video = document.getElementById("video");
@@ -215,22 +215,21 @@
         if (frontDataUrl) parts.push(dataUrlToPart(frontDataUrl));
         if (backDataUrl) parts.push(dataUrlToPart(backDataUrl));
 
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${encodeURIComponent(API_KEY)}`;
-
-        const res = await fetch(url, {
+        const res = await fetch(WORKER_URL, {
           method: "POST",
           headers: {
             "Content-Type": "application/json"
           },
           body: JSON.stringify({
-            contents: [{ parts }]
+            model: MODEL,
+            parts
           })
         });
 
         const data = await res.json();
 
         if (!res.ok) {
-          const apiMsg = data?.error?.message || `HTTP ${res.status}`;
+          const apiMsg = data?.error?.message || data?.error || `HTTP ${res.status}`;
           setStatus("Error de API: " + apiMsg);
           outputEl.textContent = JSON.stringify(data, null, 2);
           btnRead.disabled = false;
