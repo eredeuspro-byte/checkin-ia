@@ -116,7 +116,7 @@
 
   <script>
     const WORKER_URL = "https://young-dew-1099.eredeuspro.workers.dev";
-    const MODEL = "gemini-3.8-flash";
+    const MODEL = "gemini-2.5-flash";
 
     const video = document.getElementById("video");
     const canvas = document.getElementById("canvas");
@@ -207,32 +207,71 @@
         setStatus("Enviando imagen(es) a Gemini...");
         outputEl.textContent = "Esperando respuesta...";
 
-        const parts = [
-          {
-            text: "Extrae los datos visibles del documento de identidad (anverso y/o reverso) en formato JSON limpio, sin markdown. Si un dato no es legible o no aparece, pon null."
-          }
-        ];
+        const prompt = `Extrae todos los datos de estas imágenes (anverso y reverso) de un documento de identidad para el registro de viajeros en España (Real Decreto 933/2021).
+Devuélveme el resultado únicamente en formato JSON válido con estos campos exactos:
+- tipo_documento (DNI, PASAPORTE, TIE, OTRO)
+- numero_documento
+- numero_soporte (el código IDESP o IXESP de 9 caracteres, si existe)
+- nombre
+- primer_apellido
+- segundo_apellido (null si no tiene)
+- sexo (M o F)
+- fecha_nacimiento (YYYY-MM-DD)
+- nacionalidad (código ISO de 3 letras, ej: ESP)
+- direccion_completa (del reverso, si aparece)
+- localidad (del reverso)
+- provincia (del reverso)
+- pais_residencia
+
+Si algún dato no aparece en las imágenes, pon null. No inventes nada.`;
+
+        const parts = [{ text: prompt }];
         if (frontDataUrl) parts.push(dataUrlToPart(frontDataUrl));
         if (backDataUrl) parts.push(dataUrlToPart(backDataUrl));
 
-        const res = await fetch(WORKER_URL, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({
-            model: MODEL,
-            parts
-          })
-        });
+        let data = null;
+        let lastError = "";
 
-        const data = await res.json();
+        for (let intento = 1; intento <= 3; intento++) {
+          if (intento > 1) {
+            setStatus(`Servidor ocupado. Reintentando (${intento}/3)...`);
+            await new Promise(r => setTimeout(r, 2000));
+          }
 
-        if (!res.ok) {
-          const apiMsg = data?.error?.message || data?.error || `HTTP ${res.status}`;
-          setStatus("Error de API: " + apiMsg);
-          outputEl.textContent = JSON.stringify(data, null, 2);
-          btnRead.disabled = false;
+          const res = await fetch(WORKER_URL, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              model: MODEL,
+              parts
+            })
+          });
+
+          const rawText = await res.text();
+
+          try {
+            data = JSON.parse(rawText);
+          } catch {
+            lastError = `HTTP ${res.status}: ${rawText.trim()}`;
+            if (res.status === 503 || res.status === 524) continue;
+            throw new Error(lastError);
+          }
+
+          if (!res.ok) {
+            lastError = data?.error?.message || data?.error || `HTTP ${res.status}`;
+            if (res.status === 503 || res.status === 524) continue;
+            setStatus("Error de API: " + lastError);
+            outputEl.textContent = JSON.stringify(data, null, 2);
+            return;
+          }
+
+          lastError = "";
+          break;
+        }
+
+        if (lastError) {
+          setStatus("Error tras 3 intentos: " + lastError);
+          outputEl.textContent = data ? JSON.stringify(data, null, 2) : lastError;
           return;
         }
 
