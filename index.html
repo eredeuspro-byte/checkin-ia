@@ -3,124 +3,135 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Check-in IA - Prueba</title>
+  <title>Lectura DNI / Pasaporte — Check-in</title>
   <style>
+    * { box-sizing: border-box; font-family: system-ui, -apple-system, sans-serif; }
     body {
-      font-family: system-ui, -apple-system, sans-serif;
-      background: #111;
-      color: #f4f4f5;
       margin: 0;
       padding: 16px;
-    }
-    .box {
-      max-width: 680px;
-      margin: 0 auto;
-      background: #1c1c21;
-      padding: 16px;
-      border-radius: 12px;
-      border: 1px solid #2e2e36;
-    }
-    h1 {
-      font-size: 1.2rem;
-      margin: 0 0 12px;
-    }
-    video, img {
-      width: 100%;
-      max-height: 260px;
-      object-fit: cover;
-      border-radius: 8px;
-      background: #000;
-      display: block;
-    }
-    .row {
+      background: #111318;
+      color: #f3f4f6;
       display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      margin: 12px 0;
+      justify-content: center;
+    }
+    .app {
+      width: 100%;
+      max-width: 640px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    video, canvas, img {
+      width: 100%;
+      border-radius: 10px;
+      background: #1f2430;
+      object-fit: cover;
+    }
+    video { aspect-ratio: 4 / 3; }
+    .controls {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
     }
     button {
-      padding: 10px 14px;
+      padding: 12px 14px;
       border: 0;
       border-radius: 8px;
-      background: #2563eb;
-      color: #fff;
       font-weight: 600;
+      font-size: 0.95rem;
       cursor: pointer;
+      background: #2b3242;
+      color: #fff;
     }
-    button.secondary {
-      background: #334155;
-    }
-    button.primary {
-      background: #16a34a;
-    }
-    button:disabled {
-      opacity: 0.45;
-      cursor: not-allowed;
-    }
-    .thumbs {
+    button.primary { background: #16a34a; }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .previews {
       display: grid;
-      grid-template-columns: 1fr 1fr;
+      grid-template-columns: repeat(2, 1fr);
       gap: 10px;
-      margin: 12px 0;
     }
-    .thumbs img {
-      height: 130px;
+    .slot {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
     }
-    pre {
-      background: #0b0b0e;
+    .slot span {
+      font-size: 0.85rem;
+      color: #cbd5e1;
+    }
+    .slot img {
+      aspect-ratio: 4 / 3;
+    }
+    .box {
+      background: #1a1f2b;
+      border: 1px solid #2d3548;
+      border-radius: 10px;
       padding: 12px;
-      border-radius: 8px;
-      overflow-x: auto;
       white-space: pre-wrap;
       word-break: break-word;
-      border: 1px solid #2a2a32;
-      font-size: 0.85rem;
-    }
-    .status {
-      margin: 10px 0;
-      padding: 10px;
-      border-radius: 8px;
-      background: #24242c;
       font-size: 0.9rem;
+    }
+    pre {
+      margin: 0;
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-size: 0.85rem;
+      max-height: 360px;
+      overflow: auto;
     }
   </style>
 </head>
 <body>
-  <div class="box">
-    <h1>Check-in Hotelero (Prueba Cámara + Gemini)</h1>
-
+  <main class="app">
     <video id="video" autoplay playsinline muted></video>
     <canvas id="canvas" style="display:none;"></canvas>
 
-    <div class="row">
-      <button id="btnStart" type="button">Encender cámara</button>
-      <button id="btnFront" type="button" class="secondary" disabled>Foto Anverso</button>
-      <button id="btnBack" type="button" class="secondary" disabled>Foto Reverso</button>
+    <div class="controls">
+      <button id="btnCam" type="button">Encender cámara</button>
+      <button id="btnFront" type="button" disabled>Foto Anverso</button>
+      <button id="btnBack" type="button" disabled>Foto Reverso</button>
       <button id="btnRead" type="button" class="primary" disabled>Leer documento</button>
     </div>
 
-    <div class="thumbs">
-      <div>
-        <small>Anverso</small>
-        <img id="imgFront" alt="Anverso" />
+    <div class="previews">
+      <div class="slot">
+        <span>Anverso</span>
+        <img id="imgFront" alt="Vista previa anverso" />
       </div>
-      <div>
-        <small>Reverso</small>
-        <img id="imgBack" alt="Reverso" />
+      <div class="slot">
+        <span>Reverso</span>
+        <img id="imgBack" alt="Vista previa reverso" />
       </div>
     </div>
 
-    <div id="status" class="status">Estado: Listo para encender cámara.</div>
-    <pre id="output">Aquí aparecerá el resultado o el mensaje exacto de error.</pre>
-  </div>
+    <div id="status" class="box">Estado: Listo para empezar.</div>
+    <div class="box"><pre id="output">{}</pre></div>
+  </main>
 
   <script>
     const WORKER_URL = "https://young-dew-1099.eredeuspro.workers.dev";
-    const MODEL = "gemini-3.8-flash";
+    const MODELS = ["gemini-3.8-flash", "gemini-3.8-flash-lite"];
 
-    const video = document.getElementById("video");
-    const canvas = document.getElementById("canvas");
-    const btnStart = document.getElementById("btnStart");
+    const PROMPT = `Analiza las imágenes del documento de identidad o pasaporte para check-in hotelero y devuelve ÚNICAMENTE un JSON válido (sin markdown ni texto extra) con esta estructura:
+{
+  "tipo_documento": "",
+  "numero_documento": "",
+  "soporte": "",
+  "nombre": "",
+  "apellidos": "",
+  "sexo": "",
+  "fecha_nacimiento": "",
+  "nacionalidad": "",
+  "fecha_expedicion": "",
+  "fecha_caducidad": "",
+  "domicilio": "",
+  "mrz": ""
+}
+Si algún dato no es visible o no aplica, déjalo como cadena vacía "".`;
+
+    const videoEl = document.getElementById("video");
+    const canvasEl = document.getElementById("canvas");
+    const btnCam = document.getElementById("btnCam");
     const btnFront = document.getElementById("btnFront");
     const btnBack = document.getElementById("btnBack");
     const btnRead = document.getElementById("btnRead");
@@ -129,162 +140,54 @@
     const statusEl = document.getElementById("status");
     const outputEl = document.getElementById("output");
 
-    let frontDataUrl = null;
-    let backDataUrl = null;
+    let stream = null;
+    let frontBase64 = null;
+    let backBase64 = null;
 
     function setStatus(msg) {
       statusEl.textContent = "Estado: " + msg;
     }
 
-    btnStart.addEventListener("click", async () => {
+    function updateReadButton() {
+      btnRead.disabled = !(frontBase64 || backBase64);
+    }
+
+    btnCam.addEventListener("click", async () => {
       try {
-        setStatus("Solicitando cámara...");
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: { ideal: "environment" } },
+        if (stream) {
+          stream.getTracks().forEach(t => t.stop());
+        }
+        setStatus("Solicitando acceso a la cámara...");
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1080 } },
           audio: false
         });
-        video.srcObject = stream;
+        videoEl.srcObject = stream;
         btnFront.disabled = false;
         btnBack.disabled = false;
-        setStatus("Cámara activa.");
+        setStatus("Cámara activa. Enfoca el documento.");
       } catch (err) {
-        setStatus("Error de cámara: " + err.message);
-        outputEl.textContent = String(err);
+        setStatus("No se pudo abrir la cámara: " + (err.message || err));
       }
     });
 
-    function capturePhoto() {
-      if (!video.videoWidth || !video.videoHeight) {
-        throw new Error("El vídeo aún no tiene resolución lista.");
+    function captureFrame(targetImg, side) {
+      if (!videoEl.videoWidth || !videoEl.videoHeight) {
+        setStatus("La cámara aún no tiene imagen lista.");
+        return;
       }
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      const ctx = canvas.getContext("2d");
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      return canvas.toDataURL("image/jpeg", 0.85);
-    }
 
-    function updateReadButton() {
-      btnRead.disabled = !(frontDataUrl || backDataUrl);
-    }
+      const maxWidth = 1280;
+      const scale = Math.min(1, maxWidth / videoEl.videoWidth);
+      canvasEl.width = Math.round(videoEl.videoWidth * scale);
+      canvasEl.height = Math.round(videoEl.videoHeight * scale);
 
-    btnFront.addEventListener("click", () => {
-      try {
-        frontDataUrl = capturePhoto();
-        imgFront.src = frontDataUrl;
-        updateReadButton();
-        setStatus("Foto de anverso capturada.");
-      } catch (err) {
-        setStatus(err.message);
-      }
-    });
+      const ctx = canvasEl.getContext("2d");
+      ctx.drawImage(videoEl, 0, 0, canvasEl.width, canvasEl.height);
 
-    btnBack.addEventListener("click", () => {
-      try {
-        backDataUrl = capturePhoto();
-        imgBack.src = backDataUrl;
-        updateReadButton();
-        setStatus("Foto de reverso capturada.");
-      } catch (err) {
-        setStatus(err.message);
-      }
-    });
+      const dataUrl = canvasEl.toDataURL("image/jpeg", 0.72);
+      targetImg.src = dataUrl;
 
-    function dataUrlToPart(dataUrl) {
-      const [meta, base64] = dataUrl.split(",");
-      const mimeMatch = meta.match(/data:(.*?);base64/);
-      return {
-        inline_data: {
-          mime_type: mimeMatch ? mimeMatch[1] : "image/jpeg",
-          data: base64
-        }
-      };
-    }
-
-    btnRead.addEventListener("click", async () => {
-      try {
-        btnRead.disabled = true;
-        setStatus("Enviando imagen(es) a Gemini...");
-        outputEl.textContent = "Esperando respuesta...";
-
-        const prompt = `Extrae todos los datos de estas imágenes (anverso y reverso) de un documento de identidad para el registro de viajeros en España (Real Decreto 933/2021).
-Devuélveme el resultado únicamente en formato JSON válido con estos campos exactos:
-- tipo_documento (DNI, PASAPORTE, TIE, OTRO)
-- numero_documento
-- numero_soporte (el código IDESP o IXESP de 9 caracteres, si existe)
-- nombre
-- primer_apellido
-- segundo_apellido (null si no tiene)
-- sexo (M o F)
-- fecha_nacimiento (YYYY-MM-DD)
-- nacionalidad (código ISO de 3 letras, ej: ESP)
-- direccion_completa (del reverso, si aparece)
-- localidad (del reverso)
-- provincia (del reverso)
-- pais_residencia
-
-Si algún dato no aparece en las imágenes, pon null. No inventes nada.`;
-
-        const parts = [{ text: prompt }];
-        if (frontDataUrl) parts.push(dataUrlToPart(frontDataUrl));
-        if (backDataUrl) parts.push(dataUrlToPart(backDataUrl));
-
-        let data = null;
-        let lastError = "";
-
-        for (let intento = 1; intento <= 3; intento++) {
-          if (intento > 1) {
-            setStatus(`Servidor ocupado. Reintentando (${intento}/3)...`);
-            await new Promise(r => setTimeout(r, 2000));
-          }
-
-          const res = await fetch(WORKER_URL, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              model: MODEL,
-              parts
-            })
-          });
-
-          const rawText = await res.text();
-
-          try {
-            data = JSON.parse(rawText);
-          } catch {
-            lastError = `HTTP ${res.status}: ${rawText.trim()}`;
-            if (res.status === 503 || res.status === 524) continue;
-            throw new Error(lastError);
-          }
-
-          if (!res.ok) {
-            lastError = data?.error?.message || data?.error || `HTTP ${res.status}`;
-            if (res.status === 503 || res.status === 524) continue;
-            setStatus("Error de API: " + lastError);
-            outputEl.textContent = JSON.stringify(data, null, 2);
-            return;
-          }
-
-          lastError = "";
-          break;
-        }
-
-        if (lastError) {
-          setStatus("Error tras 3 intentos: " + lastError);
-          outputEl.textContent = data ? JSON.stringify(data, null, 2) : lastError;
-          return;
-        }
-
-        const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
-        setStatus("Lectura completada.");
-        outputEl.textContent = text || JSON.stringify(data, null, 2);
-      } catch (err) {
-        setStatus("Error de red/script: " + err.message);
-        outputEl.textContent = String(err);
-      } finally {
-        updateReadButton();
-      }
-    });
-  </script>
-</body>
-</html>
+      const base64Clean = dataUrl.split(",")[1];
+      if (side === "front") frontBase64 = base64Clean;
+      if (side === "back") backBase64 = base64Clean;
