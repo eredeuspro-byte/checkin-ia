@@ -191,3 +191,95 @@ Si algún dato no es visible o no aplica, déjalo como cadena vacía "".`;
       const base64Clean = dataUrl.split(",")[1];
       if (side === "front") frontBase64 = base64Clean;
       if (side === "back") backBase64 = base64Clean;
+
+      updateReadButton();
+      setStatus(`Foto de ${side === "front" ? "anverso" : "reverso"} capturada.`);
+    }
+
+    btnFront.addEventListener("click", () => captureFrame(imgFront, "front"));
+    btnBack.addEventListener("click", () => captureFrame(imgBack, "back"));
+
+    btnRead.addEventListener("click", async () => {
+      if (!frontBase64 && !backBase64) return;
+
+      btnRead.disabled = true;
+      outputEl.textContent = "{}";
+
+      const parts = [{ text: PROMPT }];
+      if (frontBase64) {
+        parts.push({ inlineData: { mimeType: "image/jpeg", data: frontBase64 } });
+      }
+      if (backBase64) {
+        parts.push({ inlineData: { mimeType: "image/jpeg", data: backBase64 } });
+      }
+
+      try {
+        let data = null;
+        let lastError = "";
+        let succeeded = false;
+
+        for (const currentModel of MODELS) {
+          for (let intento = 1; intento <= 3; intento++) {
+            if (intento > 1) {
+              const waitMs = intento * 2000;
+              setStatus(`${currentModel} saturado. Reintentando (${intento}/3)...`);
+              await new Promise(r => setTimeout(r, waitMs));
+            } else {
+              setStatus(`Enviando imagen(es) a ${currentModel}...`);
+            }
+
+            const res = await fetch(WORKER_URL, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                model: currentModel,
+                parts
+              })
+            });
+
+            const rawText = await res.text();
+
+            try {
+              data = JSON.parse(rawText);
+            } catch {
+              lastError = `HTTP ${res.status}: ${rawText.trim()}`;
+              if (res.status === 503 || res.status === 524) continue;
+              throw new Error(lastError);
+            }
+
+            if (!res.ok) {
+              lastError = data?.error?.message || data?.error || `HTTP ${res.status}`;
+              if (res.status === 503 || res.status === 524) continue;
+              setStatus("Error de API: " + lastError);
+              outputEl.textContent = JSON.stringify(data, null, 2);
+              return;
+            }
+
+            lastError = "";
+            succeeded = true;
+            break;
+          }
+
+          if (succeeded) break;
+        }
+
+        if (!succeeded) {
+          setStatus("Alta demanda en los modelos tras reintentos: " + lastError);
+          outputEl.textContent = data ? JSON.stringify(data, null, 2) : lastError;
+          return;
+        }
+
+        const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+        const cleanJson = text.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/\s*```$/i, "").trim();
+
+        setStatus("Lectura completada.");
+        outputEl.textContent = cleanJson || JSON.stringify(data, null, 2);
+      } catch (err) {
+        setStatus("Error de conexión: " + (err.message || err));
+      } finally {
+        updateReadButton();
+      }
+    });
+  </script>
+</body>
+</html>
